@@ -1,12 +1,17 @@
 const Product = require('../models/product')
 
 const getAllProductsStatic = async (req, res) => {
-  const products = await Product.find({}).select({ price: 1, name: 1 })
+  const products = await Product.find({ price: { $gt: 30 } })
+    .select({
+      price: 1,
+      name: 1,
+    })
+    .sort({ price: 1 })
   res.status(200).json({ products, nbHits: products.length })
 }
 
 const getAllProducts = async (req, res) => {
-  const { featured, company, name, sort, fields } = req.query
+  const { featured, company, name, sort, fields, numericFilters } = req.query
   // pagination logic
   const page = Number(req.query.page) || 1
   const limit = Number(req.query.limit) || 10
@@ -23,9 +28,31 @@ const getAllProducts = async (req, res) => {
   if (name) {
     queryObj.name = { $regex: name, $options: 'i' }
   }
+  // numeric filters:
+  // query sintax: numericFilters=price>30,price<50,rating>4
+  if (numericFilters) {
+    const operatorMap = {
+      '>': '$gt',
+      '>=': '$gte',
+      '<': '$lt',
+      '<=': '$lte',
+      '=': '$eq',
+    }
+    const regex = /\b(<|>|<=|>=|=)\b/g
+    let filters = numericFilters.replace(
+      regex,
+      (match) => `-${operatorMap[match]}-`
+    )
+    // console.log(numericFilters.split(','))
+    console.log(filters)
+    filters = filters.split(',').forEach((item) => {
+      const [key, op, value] = item.split('-')
+      // console.log(key, op, value)
+      queryObj[key] = { [op]: value }
+    })
+  }
+  console.log(queryObj)
   let result = Product.find(queryObj)
-
-  //
 
   // fields query
   if (fields) {
@@ -34,7 +61,7 @@ const getAllProducts = async (req, res) => {
     fieldsQuery.map((e) => {
       fieldsObj[e] = 1
     })
-    console.log(fieldsObj)
+    // console.log(fieldsObj)
     result = result.select(fieldsObj)
   }
 
@@ -50,7 +77,7 @@ const getAllProducts = async (req, res) => {
         sortObj[e] = 1
       }
     })
-    console.log(sortObj)
+    // console.log(sortObj)
     result = result.sort(sortObj)
   } else {
     result = result.sort({ createdAt: -1 })
