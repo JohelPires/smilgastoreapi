@@ -1,12 +1,17 @@
 const Product = require('../models/product')
 
 const getAllProductsStatic = async (req, res) => {
-  const products = await Product.find({}).sort({ price: 1, name: -1 })
+  const products = await Product.find({}).select({ price: 1, name: 1 })
   res.status(200).json({ products, nbHits: products.length })
 }
 
 const getAllProducts = async (req, res) => {
-  const { featured, company, name, sort } = req.query
+  const { featured, company, name, sort, fields } = req.query
+  // pagination logic
+  const page = Number(req.query.page) || 1
+  const limit = Number(req.query.limit) || 10
+  const skip = (page - 1) * limit
+
   const queryObj = {}
 
   if (featured) {
@@ -19,6 +24,20 @@ const getAllProducts = async (req, res) => {
     queryObj.name = { $regex: name, $options: 'i' }
   }
   let result = Product.find(queryObj)
+
+  //
+
+  // fields query
+  if (fields) {
+    const fieldsQuery = fields.split(',')
+    const fieldsObj = {}
+    fieldsQuery.map((e) => {
+      fieldsObj[e] = 1
+    })
+    console.log(fieldsObj)
+    result = result.select(fieldsObj)
+  }
+
   // sort query
   if (sort) {
     const sortQuery = sort.split(',')
@@ -36,9 +55,14 @@ const getAllProducts = async (req, res) => {
   } else {
     result = result.sort({ createdAt: -1 })
   }
+
+  result = result.limit(limit).skip(skip)
+
   const products = await result
 
-  res.status(200).json({ products, nbHits: products.length })
+  res
+    .status(200)
+    .json({ products, nbHits: products.length, page: Number(page) || 1 })
 }
 
 module.exports = { getAllProductsStatic, getAllProducts }
